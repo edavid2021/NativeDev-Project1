@@ -1,58 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Image Gallery</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        async function refreshSignedUrl(imageElement, bucketName, fileName) {
-            try {
-                const response = await fetch('/get-signed-url', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ bucket: bucketName, file: fileName }),
-                });
+      async function deleteImage(bucketName, fileName, imageCard) {
+        try {
+          const response = await fetch("/delete-file", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bucket: bucketName, file: fileName }),
+          });
 
-                if (response.ok) {
-                    const { signedUrl } = await response.json();
-                    imageElement.src = signedUrl; // Update the image source
-                } else {
-                    console.error('Failed to fetch a new signed URL');
-                }
-            } catch (error) {
-                console.error('Error refreshing signed URL:', error);
-            }
+          if (response.ok) {
+            const result = await response.json();
+            console.log(result.message);
+            // Remove the image card from the page
+            imageCard.remove();
+          } else {
+            const error = await response.json();
+            console.error("Error deleting image:", error.error);
+          }
+        } catch (error) {
+          console.error("Error sending delete request:", error);
         }
+      }
 
-        function handleImageError(event, bucketName, fileName) {
-            console.warn(`Signed URL expired for ${fileName}, refreshing...`);
-            refreshSignedUrl(event.target, bucketName, fileName);
+      async function refreshSignedUrl(imageElement, bucketName, fileName) {
+        try {
+          const response = await fetch("/get-signed-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bucket: bucketName, file: fileName }),
+          });
+
+          if (response.ok) {
+            const { signedUrl } = await response.json();
+            imageElement.src = signedUrl; // Update the image source
+          } else {
+            console.error("Failed to fetch a new signed URL");
+          }
+        } catch (error) {
+          console.error("Error refreshing signed URL:", error);
         }
+      }
+
+      function handleImageError(event, bucketName, fileName) {
+        console.warn(`Signed URL expired for ${fileName}, refreshing...`);
+        refreshSignedUrl(event.target, bucketName, fileName);
+      }
+
+      function validateUploadForm(event) {
+        const fileInput = document.querySelector('input[name="form_file"]');
+        const errorMessage = document.getElementById("error-message");
+
+        // Clear any previous error messages
+        errorMessage.textContent = "";
+
+        // Check if a file is selected
+        if (!fileInput.value) {
+          event.preventDefault(); // Prevent form submission
+          errorMessage.textContent = "Please select a file before uploading";
+          errorMessage.classList.remove("hidden");
+
+          // Remove the error message after 2 seconds
+          setTimeout(() => {
+            errorMessage.classList.add("hidden");
+          }, 1000);
+        }
+      }
     </script>
-</head>
-<body class="bg-gray-100">
-    <div class="container mx-auto py-8">
-        <h1 class="text-3xl font-bold text-center mb-6">Image Gallery</h1>
+  </head>
+  <body class="bg-gray-100 min-h-screen flex flex-col items-center py-10">
+    <div class="w-full max-w-4xl">
+      <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">
+        📸 Image Gallery
+      </h1>
 
-        <!-- Upload Form -->
-        <form method="post" enctype="multipart/form-data" action="/upload" class="mb-8">
-            <div class="flex items-center justify-center">
-                <input type="file" name="form_file" accept="image/jpeg, image/png" class="border p-2 rounded">
-                <button type="submit" class="bg-blue-500 text-white px-4 py-2 ml-4 rounded">Upload</button>
-            </div>
-        </form>
+      <!-- Upload Form -->
+      <form
+        method="post"
+        enctype="multipart/form-data"
+        action="/upload"
+        class="mb-8 bg-white p-6 rounded-lg shadow-lg"
+        onsubmit="validateUploadForm(event)">
+        <div
+          class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <input
+            type="file"
+            name="form_file"
+            accept="image/jpeg, image/png"
+            class="border border-gray-300 p-3 rounded-lg w-full sm:w-auto" />
+          <button
+            type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg shadow-md transition duration-300">
+            Upload
+          </button>
+        </div>
+        <!-- Error Message -->
+        <p id="error-message" class="text-red-500 text-sm mt-4 hidden"></p>
+      </form>
 
-        <!-- Image Gallery -->
-        <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+      <!-- Image Gallery -->
+      <div
+        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {% for image in images %}
-        <div style="border: 1px solid #ccc; padding: 10px; width: 200px;">
-            <p>{{ image.name }}</p>
-            <img src="{{ image.url }}" alt="{{ image.name }}" style="width: 100%; height: auto;"
-                 onerror="handleImageError(this, '{{ image.bucket }}', '{{ image.name }}')">
+        <div
+          class="relative group bg-white p-3 rounded-lg shadow-md overflow-hidden">
+          <img
+            src="{{ image.url }}"
+            alt="{{ image.name }}"
+            class="w-full h-auto rounded-lg transition-transform duration-300 transform group-hover:scale-105"
+            onerror="handleImageError(this, '{{ image.bucket }}', '{{ image.name }}')" />
+
+          <!-- Delete Button (Appears on Hover) -->
+          <button
+            onclick="deleteImage('{{ image.bucket }}', '{{ image.name }}', this.parentElement)"
+            class="absolute top-2 right-2 bg-gray-600 hover:bg-red-700 text-white px-3 py-1 text-sm font-semibold rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            ❌ Delete
+          </button>
         </div>
         {% endfor %}
-        </div>
+      </div>
     </div>
-</body>
+  </body>
 </html>

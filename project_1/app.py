@@ -1,6 +1,6 @@
 import os
 from flask import Flask, redirect, request, send_file, render_template, jsonify
-from storage import upload_file, get_list_of_files, generate_signed_url  # Import storage.py functions
+from storage import upload_file, get_list_of_files, generate_signed_url, delete_file  # Import storage.py functions
 
 # Ensure the 'files' directory exists for temporary local storage
 os.makedirs('files', exist_ok=True)
@@ -14,6 +14,9 @@ GCP_BUCKET_NAME = "jpeg-bucket"
 def index():
     # Fetch the list of files with URLs from the GCP bucket
     images = get_list_of_files(GCP_BUCKET_NAME)
+    # Include the bucket name in the data passed to the template
+    for image in images:
+        image["bucket"] = GCP_BUCKET_NAME
     return render_template('index.html', images=images)
 
 @app.route('/get-signed-url', methods=['POST'])
@@ -51,6 +54,21 @@ def upload():
 
     # Redirect back to the index page
     return redirect("/")
+
+@app.route('/delete-file', methods=['POST'])
+def delete_file_endpoint():
+    data = request.json
+    bucket_name = data.get('bucket')
+    file_name = data.get('file')
+
+    if not bucket_name or not file_name:
+        return jsonify({"error": "Bucket name and file name are required"}), 400
+
+    success = delete_file(bucket_name, file_name)
+    if success:
+        return jsonify({"message": f"Deleted {file_name} from bucket {bucket_name}"}), 200
+    else:
+        return jsonify({"error": "Failed to delete the file"}), 500
 
 @app.route('/files')
 def list_files():

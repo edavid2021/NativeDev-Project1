@@ -45,6 +45,18 @@ def generate_signed_url(bucket_name, blob_name, expiration=3600):
     except Exception as e:
         logging.error(f"Error generating signed URL: {e}")
         return None
+    
+def delete_file(bucket_name, file_name):
+    """Delete a file from the GCS bucket."""
+    try:
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(file_name)
+        blob.delete()
+        logging.info(f"Deleted file: {file_name} from bucket: {bucket_name}")
+        return True
+    except Exception as e:
+        logging.error(f"Error deleting file: {e}")
+        return False
 
 def get_list_of_files(bucket_name):
     """Retrieve files from a GCS bucket with signed URLs."""
