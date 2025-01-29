@@ -1,0 +1,6 @@
+__pycache__/
+.env
+.json
+*.json
+jpeg-hw.json
+myenv/
