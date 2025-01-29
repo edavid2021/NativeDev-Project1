@@ -1,6 +1,6 @@
 import os
 from flask import Flask, redirect, request, send_file, render_template, jsonify
-from storage import upload_file, get_list_of_files  # Import storage.py functions
+from storage import upload_file, get_list_of_files, generate_signed_url  # Import storage.py functions
 
 # Ensure the 'files' directory exists for temporary local storage
 os.makedirs('files', exist_ok=True)
@@ -8,13 +8,25 @@ os.makedirs('files', exist_ok=True)
 app = Flask(__name__)
 
 # Define your GCP bucket name here
-GCP_BUCKET_NAME = "your-gcp-bucket-name"
+GCP_BUCKET_NAME = "jpeg-bucket"
 
 @app.route('/')
 def index():
-    # Fetch the list of files from the GCP bucket
+    # Fetch the list of files with URLs from the GCP bucket
     images = get_list_of_files(GCP_BUCKET_NAME)
     return render_template('index.html', images=images)
+
+@app.route('/get-signed-url', methods=['POST'])
+def get_signed_url():
+    data = request.json
+    bucket_name = data.get('bucket')
+    blob_name = data.get('file')
+    if not bucket_name or not blob_name:
+        return jsonify({"error": "Bucket name and file name are required"}), 400
+    signed_url = generate_signed_url(bucket_name, blob_name)
+    if not signed_url:
+        return jsonify({"error": "Failed to generate signed URL"}), 500
+    return jsonify({"signedUrl": signed_url})
 
 @app.route('/upload', methods=["POST"])
 def upload():

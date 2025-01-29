@@ -1,7 +1,7 @@
 import os
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from google.cloud import datastore, storage
 
 logging.basicConfig(level=logging.INFO)
@@ -30,11 +30,33 @@ def fetch_db_entry(filters):
     return list(query.fetch())
 
 # Cloud Storage Operations
+def generate_signed_url(bucket_name, blob_name, expiration=3600): 
+    """Generate a signed URL for accessing a private file."""
+    try:
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(seconds=expiration),  # URL valid for 1 hour
+            method="GET"
+        )
+        return signed_url
+    except Exception as e:
+        logging.error(f"Error generating signed URL: {e}")
+        return None
+
 def get_list_of_files(bucket_name):
+    """Retrieve files from a GCS bucket with signed URLs."""
     try:
         logging.info(f"Fetching file list from bucket: {bucket_name}")
         blobs = storage_client.list_blobs(bucket_name)
-        return [blob.name for blob in blobs]
+        files = []
+        for blob in blobs:
+            signed_url = generate_signed_url(bucket_name, blob.name)
+            if signed_url:
+                files.append({"name": blob.name, "url": signed_url})
+        return files
     except Exception as e:
         logging.error(f"Error listing files: {e}")
         return []
