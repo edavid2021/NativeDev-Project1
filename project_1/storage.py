@@ -1,110 +1,86 @@
-from google.cloud import datastore, storage
+import os
 import time
+import logging
+from datetime import datetime
+from google.cloud import datastore, storage
+
+logging.basicConfig(level=logging.INFO)
 
 datastore_client = datastore.Client()
 storage_client = storage.Client()
 
-###
-# Datastore examples
-###
+# Datastore Operations
 def list_db_entries():
     query = datastore_client.query(kind="photos")
-
-    for photo in query.fetch():
-        print(photo.items())
+    return list(query.fetch())
 
 def add_db_entry(object):
+    required_keys = {"name", "url", "user", "timestamp"}
+    if not required_keys.issubset(object.keys()):
+        raise ValueError(f"Missing required fields: {required_keys - object.keys()}")
+
     entity = datastore.Entity(key=datastore_client.key('photos'))
     entity.update(object)
-
     datastore_client.put(entity)
 
-
-def fetch_db_entry(object):
-    #print(object)
-
+def fetch_db_entry(filters):
     query = datastore_client.query(kind='photos')
+    for attr, value in filters.items():
+        query.add_filter(attr, "=", value)
+    return list(query.fetch())
 
-    for attr in object.keys():
-        query.add_filter(attr, "=", object[attr])
-
-    obj = list(query.fetch())
-
-    #print("fetch")
-    #for photo in obj:
-    #    print(photo.items())
-
-    return obj
-
-###
-# Cloud Storage examples
-###
+# Cloud Storage Operations
 def get_list_of_files(bucket_name):
-    """Lists all the blobs in the bucket."""
-    print("\n")
-    print("get_list_of_files: "+bucket_name)
-
-    blobs = storage_client.list_blobs(bucket_name)
-    print(blobs)
-    files = []
-    for blob in blobs:
-        files.append(blob.name)
-
-    return files
+    try:
+        logging.info(f"Fetching file list from bucket: {bucket_name}")
+        blobs = storage_client.list_blobs(bucket_name)
+        return [blob.name for blob in blobs]
+    except Exception as e:
+        logging.error(f"Error listing files: {e}")
+        return []
 
 def upload_file(bucket_name, file_name):
-    """Send file to bucket."""
-    print("\n")
-    print("upload_file: "+bucket_name+"/"+file_name)
-
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
-
-    blob.upload_from_filename(file_name)
-
-    return 
+    try:
+        logging.info(f"Uploading file: {bucket_name}/{file_name}")
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(file_name)
+        blob.upload_from_filename(file_name)
+        logging.info("Upload successful!")
+    except Exception as e:
+        logging.error(f"Error uploading file: {e}")
 
 def download_file(bucket_name, file_name):
-    """ Retrieve an object from a bucket and saves locally"""  
-    print("\n")
-    print("download_file: "+bucket_name+"/"+file_name)
-    bucket = storage_client.bucket(bucket_name)
+    try:
+        logging.info(f"Downloading file: {bucket_name}/{file_name}")
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(file_name)
+        blob.download_to_filename(file_name)
+        logging.info(f"Download successful: {file_name}")
+    except Exception as e:
+        logging.error(f"Error downloading file: {e}")
 
-    blob = bucket.blob(file_name)
-    blob.download_to_filename(file_name)
-    blob.reload()
-    print(f"Blob: {blob.name}")
-    print(f"Bucket: {blob.bucket.name}")
-    print(f"Storage class: {blob.storage_class}")
-    print(f"Size: {blob.size} bytes")
-    print(f"Content-type: {blob.content_type}")
-    print(f"Public URL: {blob.public_url}")
+# Example Usage
+if __name__ == "__main__":
+    bucket_name = "jpeg-bucket"
+    file_name = "test.txt"
 
-    return
+    # Upload file and add metadata to Datastore
+    upload_file(bucket_name, file_name)
+    file_url = f"https://storage.cloud.google.com/{bucket_name}/{file_name}"
+    add_db_entry({
+        "name": file_name,
+        "url": file_url,
+        "user": "your-username",
+        "timestamp": int(time.time())
+    })
 
-# print(get_list_of_files("de-andrade-fau"))
+    # List files in the bucket
+    logging.info("Files in bucket:")
+    logging.info(get_list_of_files(bucket_name))
 
-# upload_file("de-andrade-fau", "test.txt")
-# print(get_list_of_files("de-andrade-fau"))
+    # Download the file
+    download_file(bucket_name, file_name)
 
-# download_file("de-andrade-fau", "test.txt")
-# upload_file("de-andrade-fau", "test1.txt")
-# download_file("de-andrade-fau", "test1.txt")
-# print(get_list_of_files("de-andrade-fau"))
-
-# download_file("de-andrade-fau", "sample_640Ã—426.jpeg")
-
-
-###
-# Datastore
-###
-list_db_entries()
-
-obj = {"name":"fau-rocks.jpeg", "url":"blablabla.com/ricardo.jpeg", "user":"rdeandrade", 'timestamp':int(time.time())}
-add_db_entry(obj)
-
-obj1 = {'user':'rdeandrade'}
-print(obj1)
-result=fetch_db_entry(obj1)
-print(result)
-print(len(result))
+    # Fetch metadata from Datastore
+    logging.info("Datastore entries:")
+    logging.info(fetch_db_entry({"user": "your-username"}))
