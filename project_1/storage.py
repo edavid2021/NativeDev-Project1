@@ -37,13 +37,12 @@ def generate_signed_url(blob_name, expiration=3600):
         logging.error(f"Error generating signed URL: {e}")
         return None
 
-def store_signed_url(user_email, file_name, signed_url, expiration_time):
+def store_signed_url(file_name, signed_url, expiration_time):
     """Stores signed URL metadata in Google Cloud Datastore."""
     try:
-        key = datastore_client.key("SignedURL", f"{user_email}_{file_name}")
+        key = datastore_client.key("SignedURL", file_name)
         entity = datastore.Entity(key)
         entity.update({
-            "user_email": user_email,
             "file_name": file_name,
             "signed_url": signed_url,
             "expires_at": expiration_time
@@ -53,42 +52,38 @@ def store_signed_url(user_email, file_name, signed_url, expiration_time):
     except Exception as e:
         logging.error(f"Error storing signed URL: {e}")
 
-# Fetches an existing signed URL or generates a new one if expired
-def get_signed_url(user_email, file_name, expiration=3600):
-    key = datastore_client.key("SignedURL", f"{user_email}_{file_name}")
+def get_signed_url(file_name, expiration=3600):
+    """Fetches existing signed URL from Datastore, or generates a new one."""
+    key = datastore_client.key("SignedURL", file_name)
     entity = datastore_client.get(key)
+
+    expiration = int(expiration)  # ensure it's numeric
 
     if entity:
         expires_at = entity["expires_at"]
-        current_time = time.time()
-
-        if current_time < expires_at:
+        if time.time() < expires_at:
             logging.info(f"Returning cached signed URL for {file_name}")
             return entity["signed_url"]
 
-    # Generate a new signed URL if expired or missing
     new_signed_url = generate_signed_url(file_name, expiration)
-    expiration_time = time.time() + expiration  # Store new expiration time
-    store_signed_url(user_email, file_name, new_signed_url, expiration_time)
+    expiration_time = time.time() + expiration
+    store_signed_url(file_name, new_signed_url, expiration_time)
 
     return new_signed_url
 
-# Uploads a file to GCS and generates a signed URL
-def upload_file(file_path, user_email):
+def upload_file(file_path):
+    """Uploads a file to GCS and generates a signed URL."""
     try:
         file_name = os.path.basename(file_path)
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(file_name)
 
-        # Upload file
         blob.upload_from_filename(file_path)
 
-        # Generate signed URL after upload
         signed_url = generate_signed_url(file_name)
-        expiration_time = time.time() + 3600  # 1-hour expiration
+        expiration_time = time.time() + 3600
 
-        # Store signed URL in Datastore
-        store_signed_url(user_email, file_name, signed_url, expiration_time)
+        store_signed_url(file_name, signed_url, expiration_time)
 
         logging.info(f"Uploaded {file_name} and stored signed URL.")
         return signed_url
@@ -96,47 +91,45 @@ def upload_file(file_path, user_email):
         logging.error(f"Error uploading file: {e}")
         return None
 
-# Deletes a file from GCS and removes its metadata from Datastore
-def delete_file(blob_name, user_email):
+def delete_file(blob_name):
+    """Deletes file and metadata JSON from GCS and removes its Datastore entry."""
     try:
         bucket = storage_client.bucket(bucket_name)
-        
+
         # Delete image file
         image_blob = bucket.blob(blob_name)
         if image_blob.exists():
             image_blob.delete()
-            print(f"Deleted image: {blob_name}")
+            logging.info(f"Deleted image: {blob_name}")
 
-        # Delete associated JSON metadata file
+        # Delete associated metadata
         json_filename = f"{blob_name.rsplit('.', 1)[0]}.json"
         json_blob = bucket.blob(json_filename)
         if json_blob.exists():
             json_blob.delete()
-            print(f"Deleted metadata: {json_filename}")
+            logging.info(f"Deleted metadata: {json_filename}")
 
-        # Remove the entry from Datastore
+        # Remove from Datastore
         query = datastore_client.query(kind='images')
         query.add_filter("blob_name", "=", blob_name)
-        query.add_filter("useremail", "=", user_email)
         results = list(query.fetch())
 
-        if results:
-            for entity in results:
-                datastore_client.delete(entity.key)
-            print(f"Deleted Datastore entry for: {blob_name}")
+        for entity in results:
+            datastore_client.delete(entity.key)
+            logging.info(f"Deleted Datastore entry for: {blob_name}")
 
         return True
     except Exception as e:
-        print(f"Error deleting file {blob_name}: {e}")
+        logging.error(f"Error deleting file {blob_name}: {e}")
         return False
 
-# Uploads metadata JSON file for image descriptions
 def upload_metadata(file_name, metadata):
+    """Uploads a JSON metadata file to GCS."""
     try:
         json_blob_name = f"{os.path.splitext(file_name)[0]}.json"
         bucket = storage_client.bucket(bucket_name)
         json_blob = bucket.blob(json_blob_name)
-        
+
         json_blob.upload_from_string(
             json.dumps(metadata),
             content_type="application/json"
@@ -147,8 +140,8 @@ def upload_metadata(file_name, metadata):
         logging.error(f"Error uploading metadata: {e}")
         return False
 
-# Fetches image metadata JSON file from GCS
 def get_image_metadata(file_name):
+    """Fetches metadata JSON file from GCS if it exists."""
     try:
         json_blob_name = f"{os.path.splitext(file_name)[0]}.json"
         bucket = storage_client.bucket(bucket_name)
@@ -163,11 +156,8 @@ def get_image_metadata(file_name):
         logging.error(f"Error fetching metadata: {e}")
         return {"title": "Untitled Image", "description": "No description available"}
 
-# Example Usage
+# Example usage
 if __name__ == "__main__":
-    user_email = "testuser@example.com"
     file_name = "test.txt"
-
-    # Upload file and generate signed URL
-    signed_url = upload_file(file_name, user_email)
+    signed_url = upload_file(file_name)
     logging.info(f"Uploaded file signed URL: {signed_url}")
