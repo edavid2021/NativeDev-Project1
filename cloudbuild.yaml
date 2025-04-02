@@ -5,8 +5,8 @@ steps:
     args:
       - "-c"
       - |
-        gcloud secrets versions access latest --secret=app-env-file > ./server/.env
-        gcloud secrets versions access latest --secret=app-service-account > ./server/env.json
+        gcloud secrets versions access latest --secret=app-env-file > ./project_1/.env
+        gcloud secrets versions access latest --secret=app-service-account > ./project_1/cloudEnv.json
 
   # Determine if branch is blue or green
   - name: "gcr.io/cloud-builders/gcloud" # Using gcloud image instead of bash
@@ -15,9 +15,9 @@ steps:
     args:
       - "-c"
       - |
-        if [[ "$BRANCH_NAME" == "blue" ]]; then
+        if [[ "$BRANCH_NAME" == "blue-app" ]]; then
           echo "COLOR=blue" >> /workspace/env_vars
-        elif [[ "$BRANCH_NAME" == "green" ]]; then
+        elif [[ "$BRANCH_NAME" == "green-app" ]]; then
           echo "COLOR=green" >> /workspace/env_vars
         else
           echo "Invalid branch, exiting"; exit 1
@@ -31,8 +31,8 @@ steps:
         "-t",
         "gcr.io/$PROJECT_ID/cloudhw3:$BRANCH_NAME-$COMMIT_SHA",
         "-f",
-        "server/Dockerfile",
-        "./server",
+        "project_1/Dockerfile",
+        "./project_1",
       ]
 
   # Push the container image to Container Registry
