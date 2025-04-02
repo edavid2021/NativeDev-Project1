@@ -69,7 +69,7 @@ steps:
       - "--platform"
       - "managed"
       - "--to-tags"
-      - "blue=50,green=50"
+      - "blue-app=50,green-app=50"
 
 images:
   - "gcr.io/$PROJECT_ID/cloudhw3:$BRANCH_NAME-$COMMIT_SHA"
