@@ -14,7 +14,7 @@ steps:
       [
         "build",
         "-t",
-        "gcr.io/$PROJECT_ID/cloudcourseproject:$COMMIT_SHA",
+        "gcr.io/$PROJECT_ID/cloudFinal:$COMMIT_SHA",
         "-f",
         "project_1/Dockerfile",
         "./project_1",
