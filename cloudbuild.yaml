@@ -1,0 +1,46 @@
+steps:
+  # Access secrets and create files
+  - name: "gcr.io/cloud-builders/gcloud"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        gcloud secrets versions access latest --secret=app-env-file > ./project_1/.env
+        gcloud secrets versions access latest --secret=app-service-account > ./project_1/cloudEnv.json
+
+  # Build the container image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "gcr.io/$PROJECT_ID/cloudcourseproject:$COMMIT_SHA",
+        "-f",
+        "project_1/Dockerfile",
+        "./project_1",
+      ]
+
+  # Push the container image to Container Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/cloudFinal:$COMMIT_SHA"]
+
+  # Deploy to Cloud Run service
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "cloudFinal"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/cloudFinal:$COMMIT_SHA"
+      - "--region"
+      - "us-central1"
+      - "--platform"
+      - "managed"
+      - "--allow-unauthenticated"
+
+images:
+  - "gcr.io/$PROJECT_ID/cloudFinal:$COMMIT_SHA"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
